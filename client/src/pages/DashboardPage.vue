@@ -6,7 +6,6 @@ import UiIcon from '../components/UiIcon.vue'
 import UiButton from '../components/UiButton.vue'
 import MeetupCard from '../components/MeetupCard.vue'
 import StartupCard from '../components/StartupCard.vue'
-import SkillsEditor from '../components/SkillsEditor.vue'
 import { api } from '../api'
 import { useUser } from '../composables/useUser'
 import { useToast } from '../composables/useToast'
@@ -22,7 +21,6 @@ const startups = ref([])
 const recommended = ref([])
 const search = ref('')
 const filter = ref('All')
-const editingSkills = ref(false)
 const track = ref(null)
 
 const filters = ['All', ...topics]
@@ -70,10 +68,6 @@ function replaceMeetup(updated) {
     const i = meetups.value[key].findIndex((m) => m.id === updated.id)
     if (i !== -1) meetups.value[key][i] = updated
   }
-}
-
-async function onSkillsSaved() {
-  recommended.value = (await api.recommendedStartups()).slice(0, 3)
 }
 
 function scrollCarousel(dir) {
@@ -238,14 +232,14 @@ function fmtTime(iso) {
             </div>
             <div class="carousel__nav">
               <RouterLink :to="{ name: 'startups', query: { sort: 'match' } }">All matches</RouterLink>
-              <a href="#" @click.prevent="editingSkills = true">Edit skills</a>
+              <RouterLink :to="{ name: 'profile' }">Edit skills</RouterLink>
             </div>
           </div>
 
           <div v-if="user" class="my-skills">
             <span class="my-skills__label muted">Your skills:</span>
             <span v-for="sk in user.skills" :key="sk" class="tag tag--mine">{{ sk }}</span>
-            <button v-if="!user.skills.length" class="add-skills" @click="editingSkills = true">+ Add skills</button>
+            <RouterLink v-if="!user.skills.length" :to="{ name: 'profile' }" class="add-skills">+ Add skills</RouterLink>
           </div>
 
           <div v-if="recommended.length" class="grid grid--startups">
@@ -258,7 +252,6 @@ function fmtTime(iso) {
 
     <div class="page-bottom" />
 
-    <SkillsEditor v-if="editingSkills && user" :skills="user.skills" @close="editingSkills = false" @saved="onSkillsSaved" />
   </div>
 </template>
 
@@ -662,6 +655,8 @@ function fmtTime(iso) {
   color: var(--green);
 }
 .add-skills {
+  display: inline-block;
+  text-decoration: none;
   border: 1px dashed var(--surface-3);
   background: transparent;
   color: var(--text-muted);

@@ -24,6 +24,7 @@ export const MESSAGES = {
   alreadyApplied: 'You already applied for this role',
   membersOnly: 'Only team members can write in the blog',
   postInvalid: 'Title (3+) and text (10+) are required',
+  commentInvalid: 'Comment must have at least 2 letters',
   startupNotFound: 'Startup not found',
   postNotFound: 'Post not found',
   skillsArray: 'skills must be an array',
@@ -109,4 +110,28 @@ export function validateStartupInput(body) {
       links: links.map((l) => ({ label: String(l?.label || '').trim(), url: String(l?.url || '').trim() })),
     },
   }
+}
+
+/** A blog comment. Any user may write one. Returns { errors, value: { text } }. */
+export function validateCommentInput(body) {
+  const text = String(body?.text || '').trim().slice(0, 1000)
+  return { errors: text.length < 2 ? [MESSAGES.commentInvalid] : [], value: { text } }
+}
+
+export const BIO_MAX = 500
+
+/**
+ * Validates the body of "update profile". Only the fields present in the body are returned in `value`,
+ * so a caller can change the bio without touching the skills and the other way round.
+ */
+export function validateProfileInput(body) {
+  const b = body || {}
+  const errors = []
+  const value = {}
+  if ('skills' in b) {
+    if (Array.isArray(b.skills)) value.skills = cleanList(b.skills, 30)
+    else errors.push(MESSAGES.skillsArray)
+  }
+  if ('bio' in b) value.bio = String(b.bio ?? '').trim().slice(0, BIO_MAX)
+  return { errors, value }
 }

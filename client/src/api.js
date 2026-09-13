@@ -22,6 +22,7 @@ async function request(path, { method = 'GET', body } = {}) {
 const remoteApi = {
   // current user
   me: () => request('/me'),
+  updateProfile: (data) => request('/me', { method: 'PUT', body: data }),
   updateSkills: (skills) => request('/me/skills', { method: 'PUT', body: { skills } }),
 
   // meetups
@@ -42,6 +43,7 @@ const remoteApi = {
   applyToStartup: (slug, data) => request(`/startups/${slug}/apply`, { method: 'POST', body: data }),
   createPost: (slug, data) => request(`/startups/${slug}/posts`, { method: 'POST', body: data }),
   likePost: (slug, postId) => request(`/startups/${slug}/posts/${postId}/like`, { method: 'POST' }),
+  addComment: (slug, postId, data) => request(`/startups/${slug}/posts/${postId}/comments`, { method: 'POST', body: data }),
 }
 
 export const api = apiMode === 'local' ? localApi : remoteApi

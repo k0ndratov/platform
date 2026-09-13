@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import { db, toJson } from '../db.js'
-import { userToJson, startupSummary, startupFull } from '../serializers.js'
-import { MESSAGES, STAGES, validateStartupInput } from '../../../shared/rules.js'
+import { userToJson, startupSummary, startupFull, postFull } from '../serializers.js'
+import { MESSAGES, STAGES, validateStartupInput, validateCommentInput } from '../../../shared/rules.js'
 
 export const startupsRouter = Router()
 
@@ -129,4 +129,17 @@ startupsRouter.post('/:slug/posts/:postId/like', (req, res) => {
   else db.prepare('INSERT INTO post_likes (post_id, user_id) VALUES (?,?)').run(postId, req.user.id)
   const likes = db.prepare('SELECT COUNT(*) AS n FROM post_likes WHERE post_id = ?').get(postId).n
   res.json({ postId, liked: !liked, likes })
+})
+
+// POST /api/startups/:slug/posts/:postId/comments   Body: { text }  (any user)
+startupsRouter.post('/:slug/posts/:postId/comments', (req, res) => {
+  const row = findBySlug(req.params.slug)
+  if (!row) return res.status(404).json({ error: MESSAGES.startupNotFound })
+  const postId = Number(req.params.postId)
+  const post = db.prepare('SELECT 1 FROM startup_posts WHERE id = ? AND startup_id = ?').get(postId, row.id)
+  if (!post) return res.status(404).json({ error: MESSAGES.postNotFound })
+  const { errors, value } = validateCommentInput(req.body)
+  if (errors.length) return res.status(400).json({ error: errors[0] })
+  db.prepare('INSERT INTO post_comments (post_id, author_id, text) VALUES (?,?,?)').run(postId, req.user.id, value.text)
+  res.status(201).json(postFull(postId, row.id, userToJson(req.user)))
 })

@@ -13,6 +13,7 @@ export function userToJson(row) {
     levelProgress: row.level_progress,
     campus: row.campus,
     skills: parseJson(row.skills),
+    bio: row.bio || '',
     avatar: row.login[0].toUpperCase(),
   }
 }
@@ -56,14 +57,19 @@ const membersOfStartup = db.prepare(
 )
 const rolesOf = db.prepare('SELECT * FROM startup_roles WHERE startup_id = ? ORDER BY id')
 const linksOf = db.prepare('SELECT id, label, url FROM startup_links WHERE startup_id = ? ORDER BY id')
-const postsOf = db.prepare(
-  `SELECT p.*, u.login AS author_login, sm.role AS author_role,
+const POST_SQL = `SELECT p.*, u.login AS author_login, sm.role AS author_role,
      (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) AS likes,
      EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = ?) AS liked
    FROM startup_posts p
    JOIN users u ON u.id = p.author_id
-   LEFT JOIN startup_members sm ON sm.startup_id = p.startup_id AND sm.user_id = p.author_id
-   WHERE p.startup_id = ? ORDER BY p.created_at DESC`,
+   LEFT JOIN startup_members sm ON sm.startup_id = p.startup_id AND sm.user_id = p.author_id`
+const postsOf = db.prepare(`${POST_SQL} WHERE p.startup_id = ? ORDER BY p.created_at DESC`)
+const postById = db.prepare(`${POST_SQL} WHERE p.id = ? AND p.startup_id = ?`)
+const commentsOf = db.prepare(
+  `SELECT c.id, c.text, c.created_at, u.login,
+     EXISTS(SELECT 1 FROM startup_members sm WHERE sm.startup_id = ? AND sm.user_id = c.author_id) AS is_team
+   FROM post_comments c JOIN users u ON u.id = c.author_id
+   WHERE c.post_id = ? ORDER BY c.created_at, c.id`,
 )
 const roadmapOf = db.prepare('SELECT * FROM startup_roadmap WHERE startup_id = ? ORDER BY position, id')
 const updatesOf = db.prepare('SELECT id, date, text FROM startup_updates WHERE startup_id = ? ORDER BY id DESC')
@@ -71,6 +77,35 @@ const appliedTo = db.prepare('SELECT role_id FROM startup_applications WHERE sta
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+/** One blog post with its comments, oldest comment first. */
+function postToJson(p) {
+  return {
+    id: p.id,
+    author: p.author_login,
+    avatar: p.author_login[0].toUpperCase(),
+    role: p.author_role || 'Team member',
+    date: fmtDate(p.created_at),
+    title: p.title,
+    text: p.text,
+    likes: p.likes,
+    liked: Boolean(p.liked),
+    comments: commentsOf.all(p.startup_id, p.id).map((c) => ({
+      id: c.id,
+      author: c.login,
+      avatar: c.login[0].toUpperCase(),
+      team: Boolean(c.is_team),
+      date: fmtDate(c.created_at),
+      text: c.text,
+    })),
+  }
+}
+
+/** A single post of a startup, or null. Same shape as an entry of `blog`. */
+export function postFull(postId, startupId, currentUser) {
+  const p = postById.get(currentUser?.id ?? 0, postId, startupId)
+  return p ? postToJson(p) : null
 }
 
 /** Short shape for lists and cards. */
@@ -106,18 +141,7 @@ export function startupFull(row, currentUser) {
     started: row.started,
     createdAt: row.created_at,
     links: linksOf.all(row.id),
-    blog: postsOf.all(currentUser?.id ?? 0, row.id).map((p) => ({
-      id: p.id,
-      author: p.author_login,
-      avatar: p.author_login[0].toUpperCase(),
-      role: p.author_role || 'Team member',
-      date: fmtDate(p.created_at),
-      title: p.title,
-      text: p.text,
-      likes: p.likes,
-      liked: Boolean(p.liked),
-      comments: p.comments,
-    })),
+    blog: postsOf.all(currentUser?.id ?? 0, row.id).map(postToJson),
     roadmap: roadmapOf.all(row.id).map((s) => ({ id: s.id, title: s.title, date: s.date, status: s.status, text: s.text })),
     updates: updatesOf.all(row.id),
     appliedRoleIds: applied,

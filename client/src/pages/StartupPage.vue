@@ -68,6 +68,27 @@ async function toggleLike(post) {
     toast.error(e.message)
   }
 }
+// Comments: which posts are expanded, the draft text and the busy flag, all keyed by post id.
+const openComments = reactive({})
+const drafts = reactive({})
+const commentBusy = reactive({})
+function toggleComments(post) {
+  openComments[post.id] = !openComments[post.id]
+}
+async function sendComment(post) {
+  const text = (drafts[post.id] || '').trim()
+  if (text.length < 2) return
+  commentBusy[post.id] = true
+  try {
+    const updated = await api.addComment(startup.value.slug, post.id, { text })
+    post.comments = updated.comments
+    drafts[post.id] = ''
+  } catch (e) {
+    toast.error(e.message)
+  } finally {
+    commentBusy[post.id] = false
+  }
+}
 const newPost = reactive({ open: false, title: '', text: '', busy: false })
 async function publishPost() {
   newPost.busy = true
@@ -204,8 +225,30 @@ function scrollToRoles() {
                   <button :class="['post__action', { 'post__action--on': post.liked }]" @click="toggleLike(post)">
                     <UiIcon name="heart" :size="16" /> {{ post.likes }}
                   </button>
-                  <span class="post__action post__action--static"><UiIcon name="comment" :size="16" /> {{ post.comments }}</span>
+                  <button :class="['post__action', { 'post__action--open': openComments[post.id] }]" @click="toggleComments(post)">
+                    <UiIcon name="comment" :size="16" /> {{ post.comments.length }}
+                  </button>
                 </footer>
+                <div v-if="openComments[post.id]" class="comments">
+                  <div v-if="post.comments.length" class="comments__list">
+                    <div v-for="c in post.comments" :key="c.id" class="comment">
+                      <span class="member__avatar">{{ c.avatar }}</span>
+                      <div>
+                        <div class="comment__meta">
+                          <span class="member__name">{{ c.author }}</span>
+                          <span v-if="c.team" class="comment__team">team</span>
+                          <span class="muted small">{{ c.date }}</span>
+                        </div>
+                        <p class="text comment__text">{{ c.text }}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <p v-else class="muted small">No comments yet. Be the first.</p>
+                  <form class="comment-form" @submit.prevent="sendComment(post)">
+                    <input v-model="drafts[post.id]" class="input" type="text" maxlength="1000" :placeholder="`Comment as ${user?.login || 'you'}`" />
+                    <UiButton type="submit" variant="outline" :disabled="commentBusy[post.id] || (drafts[post.id] || '').trim().length < 2">Send</UiButton>
+                  </form>
+                </div>
               </article>
             </div>
             <p v-else class="muted text">
@@ -647,11 +690,62 @@ function scrollToRoles() {
 .post__action--on:hover {
   color: #ff7a90;
 }
-.post__action--static {
-  cursor: default;
+.post__action--open {
+  color: var(--cyan, #25c1cb);
 }
-.post__action--static:hover {
+
+/* Comments */
+.comments {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--surface-3);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.comments__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.comment .member__avatar {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+  flex: none;
+}
+.comment__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.comment__team {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+.comment__text {
   color: var(--text-muted);
+  font-size: 14px;
+  margin-top: 2px;
+}
+.comment-form {
+  display: flex;
+  gap: 8px;
+}
+.comment-form .input {
+  flex: 1;
+  padding: 9px 12px;
 }
 
 .modal-hint {

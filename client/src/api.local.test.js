@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { localApi } from './api.local.js'
-import { MESSAGES } from '../../shared/rules.js'
+import { MESSAGES, BIO_MAX } from '../../shared/rules.js'
 
-const KEY = 's21-demo-db-v1'
+const KEY = 's21-demo-db-v2'
 const minutes = (n) => new Date(Date.now() + n * 60_000).toISOString()
 
 beforeEach(() => {
@@ -138,6 +138,19 @@ describe('skills and recommendations', () => {
     expect((await localApi.me()).skills).toHaveLength(30)
   })
 
+  it('updateProfile changes only the given fields; bio trimmed and capped; persisted', async () => {
+    const before = await localApi.me()
+    expect(before.bio.startsWith('Frontend dev')).toBe(true)
+    const u = await localApi.updateProfile({ bio: '  Hi  ' })
+    expect(u.bio).toBe('Hi')
+    expect(u.skills).toEqual(before.skills)
+    const long = await localApi.updateProfile({ bio: 'x'.repeat(BIO_MAX + 100), skills: ['Go'] })
+    expect(long.bio).toHaveLength(BIO_MAX)
+    expect(long.skills).toEqual(['Go'])
+    await expect(localApi.updateProfile({ skills: 'Go' })).rejects.toThrow(MESSAGES.skillsArray)
+    expect((await localApi.me()).bio).toHaveLength(BIO_MAX)
+  })
+
   it('recommendedStartups excludes member startups and zero matches, sorted by score', async () => {
     const list = await localApi.recommendedStartups()
     const slugs = list.map((s) => s.slug)
@@ -208,10 +221,11 @@ describe('startups', () => {
     await expect(localApi.createPost('reviewmate', { title: 'Hello', text: 'Some longer text' })).rejects.toThrow(MESSAGES.membersOnly)
     await expect(localApi.createPost('peerdesk', { title: 'Hi', text: 'Some longer text' })).rejects.toThrow(MESSAGES.postInvalid)
     const s = await localApi.createPost('peerdesk', { title: 'Hello', text: 'Some longer text' })
-    expect(s.blog).toHaveLength(4)
+    expect(s.blog).toHaveLength(7)
     expect(s.blog[0].title).toBe('Hello')
     expect(s.blog[0].role).toBe('Founder · Frontend')
     expect(s.blog[0].likes).toBe(0)
+    expect(s.blog[0].comments).toEqual([])
     const on = await localApi.likePost('peerdesk', s.blog[0].id)
     expect(on).toEqual({ postId: s.blog[0].id, liked: true, likes: 1 })
     const off = await localApi.likePost('peerdesk', s.blog[0].id)
@@ -219,10 +233,25 @@ describe('startups', () => {
     await expect(localApi.likePost('peerdesk', 9999)).rejects.toThrow(MESSAGES.postNotFound)
   })
 
+  it('comments: any user, validated, appended oldest first, persisted', async () => {
+    const s = await localApi.startup('reviewmate')
+    const post = s.blog.find((p) => p.title === 'What students told me about peer review')
+    expect(post.comments).toHaveLength(2)
+    expect(post.comments[0].author).toBe('mageneus')
+    await expect(localApi.addComment('reviewmate', post.id, { text: 'a' })).rejects.toThrow(MESSAGES.commentInvalid)
+    await expect(localApi.addComment('reviewmate', 9999, { text: 'Hello' })).rejects.toThrow(MESSAGES.postNotFound)
+    const updated = await localApi.addComment('reviewmate', post.id, { text: 'Count me in' })
+    expect(updated.id).toBe(post.id)
+    expect(updated.comments).toHaveLength(3)
+    expect(updated.comments[2]).toMatchObject({ author: 'mageneus', team: false, text: 'Count me in' })
+    const again = await localApi.startup('reviewmate')
+    expect(again.blog.find((p) => p.id === post.id).comments).toHaveLength(3)
+  })
+
   it('full startup shape: blog newest first, roadmap ordered, links and updates present', async () => {
     const s = await localApi.startup('peerdesk')
     expect(s.blog[0].title).toBe('Why we killed the "reserve a desk" feature')
-    expect(s.roadmap.map((r) => r.status)).toEqual(['done', 'done', 'in-progress', 'planned', 'planned', 'planned'])
+    expect(s.roadmap.map((r) => r.status)).toEqual(['done', 'done', 'in-progress', 'planned', 'planned', 'planned', 'planned'])
     expect(s.roadmap.every((r) => !('position' in r))).toBe(true) // same shape as the server
     expect(s.links).toHaveLength(2)
     expect(s.updates).toHaveLength(3)

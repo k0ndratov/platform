@@ -1,9 +1,9 @@
 // Browser-only "backend". Same methods as api.js, but the data lives in localStorage.
 // Used for static demo deployments (Vercel). Mirrors the rules of the Express routes.
-import { demoUsers, demoMeetups, demoStartups } from '../../shared/demo-data.js'
-import { MESSAGES, STAGES, cleanList, matchSkills, validateMeetupInput, validateStartupInput } from '../../shared/rules.js'
+import { demoUsers, demoMeetups, demoStartups, hoursAfter } from '../../shared/demo-data.js'
+import { MESSAGES, STAGES, matchSkills, validateMeetupInput, validateStartupInput, validateCommentInput, validateProfileInput } from '../../shared/rules.js'
 
-const KEY = 's21-demo-db-v1'
+const KEY = 's21-demo-db-v2'
 const CURRENT_USER_ID = 1
 // Small pause so the UI feels like a network call. Skipped under Vitest.
 const IN_TEST = Boolean(import.meta.env?.VITEST) || import.meta.env?.MODE === 'test'
@@ -37,8 +37,8 @@ function seed() {
   const d = { nextId: 1, users: [], meetups: [], startups: [], applications: [], anchor: Date.now() }
   const id = () => d.nextId++
   const byLogin = {}
-  for (const [login, program, cohort, level, levelProgress, campus, skills] of demoUsers) {
-    const u = { id: id(), login, program, cohort, level, levelProgress, campus, skills: [...skills] }
+  for (const [login, program, cohort, level, levelProgress, campus, skills, bio = ''] of demoUsers) {
+    const u = { id: id(), login, program, cohort, level, levelProgress, campus, skills: [...skills], bio }
     d.users.push(u)
     byLogin[login] = u.id
   }
@@ -64,7 +64,8 @@ function seed() {
       roles: s.roles.map(([role, text, skills]) => ({ id: id(), role, text, skills: [...skills] })),
       links: s.links.map(([label, url]) => ({ id: id(), label, url })),
       posts: s.posts.map(([author, title, text, comments, createdAt, likes]) => ({
-        id: id(), authorId: byLogin[author], title, text, comments, createdAt,
+        id: id(), authorId: byLogin[author], title, text, createdAt,
+        comments: comments.map(([login, body, hours]) => ({ id: id(), authorId: byLogin[login], text: body, createdAt: hoursAfter(createdAt, hours) })),
         likedBy: allIds.filter((u) => u !== byLogin[author]).slice(0, likes),
       })),
       roadmap: s.roadmap.map(([title, date, status, text], i) => ({ id: id(), title, date, status, text, position: i })),
@@ -144,22 +145,29 @@ function startupSummary(s) {
 
 const fmtDate = (iso) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
+/** One blog post with its comments, oldest comment first. Same shape as the server. */
+function postToJson(s, p) {
+  const author = userById(p.authorId)
+  const member = s.members.find((m) => m.userId === p.authorId)
+  return {
+    id: p.id, author: author.login, avatar: avatar(author.login), role: member?.role || 'Team member',
+    date: fmtDate(p.createdAt), title: p.title, text: p.text,
+    likes: p.likedBy.length, liked: p.likedBy.includes(CURRENT_USER_ID),
+    comments: [...p.comments]
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((c) => {
+        const u = userById(c.authorId)
+        return { id: c.id, author: u.login, avatar: avatar(u.login), team: s.members.some((m) => m.userId === c.authorId), date: fmtDate(c.createdAt), text: c.text }
+      }),
+  }
+}
+
 function startupFull(s) {
   return {
     ...startupSummary(s),
     description: s.description, problem: s.problem, solution: s.solution, started: s.started, createdAt: s.createdAt,
     links: s.links.map((l) => ({ ...l })),
-    blog: [...s.posts]
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .map((p) => {
-        const author = userById(p.authorId)
-        const member = s.members.find((m) => m.userId === p.authorId)
-        return {
-          id: p.id, author: author.login, avatar: avatar(author.login), role: member?.role || 'Team member',
-          date: fmtDate(p.createdAt), title: p.title, text: p.text,
-          likes: p.likedBy.length, liked: p.likedBy.includes(CURRENT_USER_ID), comments: p.comments,
-        }
-      }),
+    blog: [...s.posts].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((p) => postToJson(s, p)),
     roadmap: [...s.roadmap].sort((a, b) => a.position - b.position).map(({ position, ...r }) => r), // same shape as the server (no position)
     updates: [...s.updates].reverse(),
     appliedRoleIds: db.applications.filter((a) => a.startupId === s.id && a.userId === CURRENT_USER_ID).map((a) => a.roleId),
@@ -185,13 +193,19 @@ export const localApi = {
     return userToJson(currentUser())
   },
 
-  async updateSkills(skills) {
+  /** Only the given fields change: { bio?, skills? } */
+  async updateProfile(body) {
     load()
     await delay()
-    if (!Array.isArray(skills)) fail(MESSAGES.skillsArray)
-    currentUser().skills = cleanList(skills, 30)
+    const { errors, value } = validateProfileInput(body)
+    if (errors.length) fail(errors[0])
+    Object.assign(currentUser(), value)
     save()
     return userToJson(currentUser())
+  },
+
+  updateSkills(skills) {
+    return localApi.updateProfile({ skills })
   },
 
   async meetups() {
@@ -322,7 +336,7 @@ export const localApi = {
     const t = String(title || '').trim()
     const body = String(text || '').trim()
     if (t.length < 3 || body.length < 10) fail(MESSAGES.postInvalid)
-    s.posts.push({ id: nextId(), authorId: CURRENT_USER_ID, title: t, text: body, comments: 0, likedBy: [], createdAt: new Date().toISOString() })
+    s.posts.push({ id: nextId(), authorId: CURRENT_USER_ID, title: t, text: body, comments: [], likedBy: [], createdAt: new Date().toISOString() })
     save()
     return startupFull(s)
   },
@@ -336,6 +350,18 @@ export const localApi = {
     p.likedBy = liked ? p.likedBy.filter((u) => u !== CURRENT_USER_ID) : [...p.likedBy, CURRENT_USER_ID]
     save()
     return { postId: p.id, liked: !liked, likes: p.likedBy.length }
+  },
+
+  async addComment(slug, postId, { text } = {}) {
+    load()
+    await delay()
+    const s = findStartup(slug)
+    const p = s.posts.find((x) => x.id === Number(postId)) || fail(MESSAGES.postNotFound, 404)
+    const { errors, value } = validateCommentInput({ text })
+    if (errors.length) fail(errors[0])
+    p.comments.push({ id: nextId(), authorId: CURRENT_USER_ID, text: value.text, createdAt: new Date().toISOString() })
+    save()
+    return postToJson(s, p)
   },
 
   /** Removes all demo data from this browser. */

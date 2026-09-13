@@ -68,6 +68,7 @@ There is no login yet. The current user is user #1. Send `X-User-Id: <id>` to ac
 | Method | Path | What it does |
 |---|---|---|
 | GET | `/api/me` | current user |
+| PUT | `/api/me` | update profile `{ bio?, skills? }` (only the given fields change) |
 | PUT | `/api/me/skills` | replace skills `{ skills: [] }` |
 | GET | `/api/meetups` | `{ live, upcoming, ended }` |
 | POST | `/api/meetups` | create meetup |
@@ -79,6 +80,7 @@ There is no login yet. The current user is user #1. Send `X-User-Id: <id>` to ac
 | POST | `/api/startups/:slug/apply` | apply to a role or message the founder |
 | POST | `/api/startups/:slug/posts` | blog post (team members only) |
 | POST | `/api/startups/:slug/posts/:id/like` | toggle like |
+| POST | `/api/startups/:slug/posts/:id/comments` | comment on a post (any user) |
 
 ## Deploy to Vercel (free static demo)
 
@@ -93,6 +95,11 @@ vercel --prod
 ```
 
 To try this mode locally: `VITE_API_MODE=local npm run dev -w client`.
+
+## Pitch page
+
+`/pitch` is a 3-minute slide deck about the platform (in Russian) for demos: arrow keys to move,
+`Esc` to leave. Slides show real screenshots from `client/public/pitch` with a link to the real page. The text lives in `client/src/data/pitch.js`.
 
 ## Shared demo data
 

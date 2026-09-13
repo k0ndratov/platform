@@ -1,7 +1,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { start } from '../test-utils/harness.js'
-import { MESSAGES } from '../../shared/rules.js'
+import { MESSAGES, BIO_MAX } from '../../shared/rules.js'
 
 let h
 before(async () => (h = await start()))
@@ -20,6 +20,7 @@ test('GET /api/me returns the seeded user 1', async () => {
   assert.equal(r.json.login, 'mageneus')
   assert.equal(r.json.avatar, 'M')
   assert.deepEqual(r.json.skills, ['Vue', 'JavaScript', 'Rails', 'PostgreSQL', 'Figma'])
+  assert.ok(r.json.bio.startsWith('Frontend dev'))
   assert.equal('password' in r.json, false)
 })
 
@@ -57,4 +58,20 @@ test('PUT /api/me/skills trims, dedupes and caps at 30', async () => {
   assert.equal(r.json.skills.length, 30)
   const again = await h.request('GET', '/api/me')
   assert.equal(again.json.skills.length, 30)
+})
+
+test('PUT /api/me changes only the given fields; bio is trimmed and capped', async () => {
+  const r = await h.request('PUT', '/api/me', { body: { bio: '  Hello  ', skills: ['Go'] } })
+  assert.equal(r.status, 200)
+  assert.equal(r.json.bio, 'Hello')
+  assert.deepEqual(r.json.skills, ['Go'])
+
+  const long = await h.request('PUT', '/api/me', { body: { bio: 'x'.repeat(BIO_MAX + 100) } })
+  assert.equal(long.json.bio.length, BIO_MAX)
+  assert.deepEqual(long.json.skills, ['Go']) // untouched: skills were not sent
+
+  const bad = await h.request('PUT', '/api/me', { body: { skills: 'Go' } })
+  assert.equal(bad.status, 400)
+  assert.equal(bad.json.error, MESSAGES.skillsArray)
+  assert.equal((await h.request('GET', '/api/me')).json.bio.length, BIO_MAX)
 })

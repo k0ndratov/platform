@@ -1,16 +1,16 @@
 // Pure rules shared by the server and the browser adapter. No database, no HTTP.
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
-import { MESSAGES, TOPICS, STAGES, cleanList, matchSkills, validateMeetupInput, validateStartupInput } from '../../shared/rules.js'
+import { MESSAGES, TOPICS, STAGES, cleanList, matchSkills, validateMeetupInput, validateStartupInput, validateCommentInput, validateProfileInput, BIO_MAX } from '../../shared/rules.js'
 
 describe('constants', () => {
   test('topics and stages', () => {
     assert.deepEqual(TOPICS, ['Ideas', 'Tech talk', 'Chill', 'Study group'])
     assert.deepEqual(STAGES, ['Idea', 'MVP', 'Growth'])
   })
-  test('MESSAGES is a flat object of 21 unique strings', () => {
+  test('MESSAGES is a flat object of 22 unique strings', () => {
     const values = Object.values(MESSAGES)
-    assert.equal(values.length, 21)
+    assert.equal(values.length, 22)
     assert.ok(values.every((v) => typeof v === 'string' && v.length > 0))
     assert.equal(new Set(values).size, values.length)
   })
@@ -36,10 +36,39 @@ describe('constants', () => {
       alreadyApplied: 'You already applied for this role',
       membersOnly: 'Only team members can write in the blog',
       postInvalid: 'Title (3+) and text (10+) are required',
+      commentInvalid: 'Comment must have at least 2 letters',
       startupNotFound: 'Startup not found',
       postNotFound: 'Post not found',
       skillsArray: 'skills must be an array',
     })
+  })
+})
+
+describe('validateCommentInput', () => {
+  test('trims, caps at 1000 chars, needs 2+ letters', () => {
+    assert.deepEqual(validateCommentInput({ text: '  ok  ' }), { errors: [], value: { text: 'ok' } })
+    assert.deepEqual(validateCommentInput({ text: ' a ' }).errors, [MESSAGES.commentInvalid])
+    assert.deepEqual(validateCommentInput({}).errors, [MESSAGES.commentInvalid])
+    assert.equal(validateCommentInput({ text: 'x'.repeat(1200) }).value.text.length, 1000)
+  })
+})
+
+describe('validateProfileInput', () => {
+  test('only the given fields come back; skills must be an array, cleaned and capped at 30', () => {
+    assert.deepEqual(validateProfileInput({}), { errors: [], value: {} })
+    assert.deepEqual(validateProfileInput({ skills: 'Vue' }).errors, [MESSAGES.skillsArray])
+    assert.deepEqual(validateProfileInput({ skills: undefined }).errors, [MESSAGES.skillsArray])
+    const many = Array.from({ length: 40 }, (_, i) => `S${i}`)
+    const { errors, value } = validateProfileInput({ skills: [' Vue ', 'Vue', '', ...many] })
+    assert.deepEqual(errors, [])
+    assert.equal(value.skills[0], 'Vue')
+    assert.equal(value.skills.length, 30)
+    assert.equal('bio' in value, false)
+  })
+  test('bio is trimmed and capped at BIO_MAX', () => {
+    assert.deepEqual(validateProfileInput({ bio: '  hi  ' }).value, { bio: 'hi' })
+    assert.deepEqual(validateProfileInput({ bio: null }).value, { bio: '' })
+    assert.equal(validateProfileInput({ bio: 'x'.repeat(BIO_MAX + 100) }).value.bio.length, BIO_MAX)
   })
 })
 

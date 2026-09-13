@@ -51,13 +51,16 @@ test('GET /api/startups/:slug returns the full shape', async () => {
   const r = await h.request('GET', '/api/startups/peerdesk')
   assert.equal(r.status, 200)
   assert.equal(r.json.name, 'PeerDesk')
-  assert.equal(r.json.blog.length, 3)
+  assert.equal(r.json.blog.length, 6)
   assert.equal(typeof r.json.blog[0].likes, 'number')
   assert.equal(r.json.blog[0].liked, false)
   assert.equal(r.json.blog[0].title, 'Why we killed the "reserve a desk" feature') // newest first
+  assert.equal(r.json.blog[0].comments.length, 4)
+  assert.equal(r.json.blog[0].comments[0].author, 'dijkstra_21') // oldest comment first
+  assert.equal(r.json.blog[0].comments[2].team, true) // mageneus is a member
   assert.deepEqual(
     r.json.roadmap.map((s) => s.status),
-    ['done', 'done', 'in-progress', 'planned', 'planned', 'planned'],
+    ['done', 'done', 'in-progress', 'planned', 'planned', 'planned', 'planned'],
   )
   assert.deepEqual(r.json.appliedRoleIds, [])
   assert.equal(r.json.links.length, 2)
@@ -159,11 +162,12 @@ test('posts: non-member -> 403, short title -> 400, member -> 201 and newest fir
 
   const ok = await h.request('POST', '/api/startups/peerdesk/posts', { body: { title: 'Hello', text: 'Some longer text' } })
   assert.equal(ok.status, 201)
-  assert.equal(ok.json.blog.length, 4)
+  assert.equal(ok.json.blog.length, 7)
   assert.equal(ok.json.blog[0].title, 'Hello')
   assert.equal(ok.json.blog[0].author, 'mageneus')
   assert.equal(ok.json.blog[0].role, 'Founder · Frontend')
   assert.equal(ok.json.blog[0].likes, 0)
+  assert.deepEqual(ok.json.blog[0].comments, [])
 })
 
 test('like toggles and counts', async () => {
@@ -174,6 +178,25 @@ test('like toggles and counts', async () => {
   const off = await h.request('POST', `/api/startups/peerdesk/posts/${post.id}/like`)
   assert.deepEqual(off.json, { postId: post.id, liked: false, likes: 0 })
   const missing = await h.request('POST', '/api/startups/peerdesk/posts/9999/like')
+  assert.equal(missing.status, 404)
+  assert.equal(missing.json.error, MESSAGES.postNotFound)
+})
+
+test('comments: any user can write, short -> 400, missing post -> 404, oldest first', async () => {
+  const full = await h.request('GET', '/api/startups/reviewmate')
+  const post = full.json.blog.find((p) => p.title === 'What students told me about peer review')
+  assert.equal(post.comments.length, 2)
+  const short = await h.request('POST', `/api/startups/reviewmate/posts/${post.id}/comments`, { body: { text: 'a' }, userId: 4 })
+  assert.equal(short.status, 400)
+  assert.equal(short.json.error, MESSAGES.commentInvalid)
+  const ok = await h.request('POST', `/api/startups/reviewmate/posts/${post.id}/comments`, { body: { text: 'Count me in' }, userId: 4 })
+  assert.equal(ok.status, 201)
+  assert.equal(ok.json.id, post.id)
+  assert.equal(ok.json.comments.length, 3)
+  assert.equal(ok.json.comments[2].author, 'pixelkat')
+  assert.equal(ok.json.comments[2].team, false) // pixelkat is not in the ReviewMate team
+  assert.equal(ok.json.comments[2].text, 'Count me in')
+  const missing = await h.request('POST', '/api/startups/reviewmate/posts/9999/comments', { body: { text: 'Hello' } })
   assert.equal(missing.status, 404)
   assert.equal(missing.json.error, MESSAGES.postNotFound)
 })

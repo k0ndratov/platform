@@ -25,7 +25,8 @@ db.exec(`
     level INTEGER DEFAULT 1,
     level_progress INTEGER DEFAULT 0,
     campus TEXT,
-    skills TEXT DEFAULT '[]'          -- JSON array of strings
+    skills TEXT DEFAULT '[]',         -- JSON array of strings
+    bio TEXT DEFAULT ''
   );
 
   CREATE TABLE IF NOT EXISTS meetups (
@@ -93,7 +94,6 @@ db.exec(`
     author_id INTEGER NOT NULL REFERENCES users(id),
     title TEXT NOT NULL,
     text TEXT NOT NULL,
-    comments INTEGER DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
@@ -101,6 +101,14 @@ db.exec(`
     post_id INTEGER NOT NULL REFERENCES startup_posts(id) ON DELETE CASCADE,
     user_id INTEGER NOT NULL REFERENCES users(id),
     PRIMARY KEY (post_id, user_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS post_comments (
+    id INTEGER PRIMARY KEY,
+    post_id INTEGER NOT NULL REFERENCES startup_posts(id) ON DELETE CASCADE,
+    author_id INTEGER NOT NULL REFERENCES users(id),
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
   );
 
   CREATE TABLE IF NOT EXISTS startup_roadmap (
@@ -131,6 +139,9 @@ db.exec(`
 `)
 
 // Seed once, when the users table is empty
+// Database files created before the bio column existed get it here (CREATE TABLE IF NOT EXISTS does not add columns).
+if (!db.prepare('PRAGMA table_info(users)').all().some((c) => c.name === 'bio')) db.exec("ALTER TABLE users ADD COLUMN bio TEXT DEFAULT ''")
+
 const count = db.prepare('SELECT COUNT(*) AS n FROM users').get().n
 if (count === 0) {
   seed(db)
