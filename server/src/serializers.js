@@ -2,8 +2,6 @@
 import { db, parseJson } from './db.js'
 import { matchSkills } from '../../shared/rules.js'
 
-export { matchSkills }
-
 export function userToJson(row) {
   if (!row) return null
   return {

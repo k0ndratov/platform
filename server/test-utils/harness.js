@@ -52,5 +52,5 @@ export async function start() {
     assert.equal(fingerprint(), before, 'tests must not touch server/data/school21.db')
   }
 
-  return { request, close, db, base }
+  return { request, close, db }
 }

@@ -97,10 +97,8 @@ describe('meetups', () => {
     const again = await localApi.joinMeetup(rust.id)
     expect(again.members).toHaveLength(rust.members.length + 1)
 
-    const full = all.live.find((m) => m.members.length >= m.capacity) // none seeded full: make one
-    expect(full).toBeUndefined()
+    // The adapter has a single current user, so other members are written straight into storage.
     const tiny = await localApi.createMeetup({ title: 'Tiny', topic: 'Chill', place: 'Lounge', duration: 30, capacity: 2 })
-    // host is member 1; fake a second member by joining as... the adapter has one user, so fill via storage
     const json = JSON.parse(localStorage.getItem(KEY))
     json.meetups.find((m) => m.id === tiny.id).memberIds = [2, 3]
     localApi.reset()
