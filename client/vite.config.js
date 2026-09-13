@@ -3,6 +3,13 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
+  test: {
+    environment: 'jsdom',
+    globals: false,
+    include: ['src/**/*.test.js'],
+    restoreMocks: true,
+    unstubEnvs: true,
+  },
   server: {
     port: 5173,
     fs: {
