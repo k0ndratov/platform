@@ -5,3 +5,6 @@ dist
 *.png
 server/data/*.db
 .vercel
+
+# screenshots used by the pitch page
+!client/public/pitch/*.png

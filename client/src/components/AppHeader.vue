@@ -6,16 +6,13 @@ import WaveRibbon from './WaveRibbon.vue'
 
 defineProps({
   variant: { type: String, default: 'dashboard' }, // dashboard | page
-  notifications: { type: Number, default: 1 },
 })
 
 const nav = [
   { label: 'Dashboard', to: { name: 'dashboard' } },
   { label: 'Meetups', to: { name: 'meetups' }, match: '/meetups' },
   { label: 'Startups', to: { name: 'startups' }, match: '/startups' },
-  { label: 'Projects', to: '/projects' },
-  { label: 'Calendar', to: '/calendar' },
-  { label: 'More', to: '/more' },
+  { label: 'Profile', to: { name: 'profile' }, match: '/profile' },
 ]
 </script>
 
@@ -68,29 +65,22 @@ const nav = [
       <Logo21 :size="variant === 'dashboard' ? 138 : 140" />
     </RouterLink>
 
-    <nav class="nav">
-      <RouterLink
-        v-for="item in nav"
-        :key="item.label"
-        :to="item.to"
-        class="nav__link"
-        :class="{ 'router-link-active': item.match && $route.path.startsWith(item.match) }"
-      >
-        {{ item.label }}
-      </RouterLink>
-    </nav>
+    <div class="topbar">
+      <nav class="nav">
+        <RouterLink
+          v-for="item in nav"
+          :key="item.label"
+          :to="item.to"
+          class="nav__link"
+          :class="{ 'router-link-active': item.match && $route.path.startsWith(item.match) }"
+        >
+          {{ item.label }}
+        </RouterLink>
+      </nav>
 
-    <div class="actions">
-      <button class="icon-btn" title="Hub"><UiIcon name="hub" /></button>
-      <button class="icon-btn" title="Notifications">
-        <UiIcon name="bell" />
-        <span v-if="notifications" class="badge">{{ notifications }}</span>
-      </button>
-      <button v-if="variant === 'page'" class="round-btn" title="Search"><UiIcon name="search" /></button>
-      <button class="round-btn round-btn--menu" title="Menu">
-        <UiIcon name="dots" />
-        <span v-if="variant === 'page'" class="avatar"><UiIcon name="user" :size="26" /></span>
-      </button>
+      <div class="actions">
+        <RouterLink :to="{ name: 'profile' }" class="avatar" title="My profile" aria-label="My profile"><UiIcon name="user" :size="26" /></RouterLink>
+      </div>
     </div>
 
     <div class="header__content">
@@ -132,7 +122,7 @@ const nav = [
 }
 .logo {
   position: absolute;
-  z-index: 1;
+  z-index: 2;
 }
 .logo--dashboard {
   left: 362px;
@@ -143,14 +133,27 @@ const nav = [
   top: 50px;
 }
 
-.nav {
+/* Top bar: [space for the logo] [nav, centered] [actions, right]. A grid, so the nav and the
+   action buttons can never overlap, whatever the window width. */
+.topbar {
+  z-index: 2; /* above .header__content, which starts at the top of the header on the dashboard */
+  --topbar-left: 280px; /* the page logo ends at 260px */
   position: absolute;
-  top: 30px;
-  left: 50%;
-  transform: translateX(-50%);
+  top: 14px;
+  left: 0;
+  right: 48px;
+  display: grid;
+  grid-template-columns: minmax(var(--topbar-left), 1fr) auto minmax(max-content, 1fr);
+  align-items: center;
+}
+.header--dashboard .topbar {
+  --topbar-left: 520px; /* the dashboard logo ends at 500px */
+}
+.nav {
+  grid-column: 2;
   display: flex;
   gap: 62px;
-  z-index: 1;
+  justify-self: center;
 }
 .nav__link {
   color: var(--text);
@@ -168,55 +171,11 @@ const nav = [
 }
 
 .actions {
-  position: absolute;
-  top: 14px;
-  right: 48px;
+  grid-column: 3;
   display: flex;
   align-items: center;
   gap: 16px;
-  z-index: 1;
-}
-.icon-btn,
-.round-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  cursor: pointer;
-  padding: 0;
-}
-.icon-btn {
-  width: 36px;
-  height: 36px;
-}
-.badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--green);
-  color: #1d2633;
-  font-size: 10px;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
-}
-.round-btn {
-  height: 56px;
-  min-width: 56px;
-  border-radius: 999px;
-  background: #2b3441;
-  gap: 10px;
-  padding: 0 14px;
-}
-.round-btn:hover {
-  background: #343e4d;
+  justify-self: end;
 }
 .avatar {
   width: 40px;
@@ -226,11 +185,30 @@ const nav = [
   color: #6b7583;
   display: grid;
   place-items: center;
-  margin-right: -6px;
+  transition: background 0.15s;
+}
+.avatar:hover,
+.avatar.router-link-active {
+  background: var(--green);
+  color: #1d2633;
 }
 
 .header__content {
   position: relative;
   z-index: 1;
+}
+@media (max-width: 1100px) {
+  /* Narrow windows: the nav may sit above the logo, so lift the bar a bit and let the left column shrink. */
+  .topbar,
+  .header--dashboard .topbar {
+    --topbar-left: 0px;
+    top: 4px;
+  }
+  .nav {
+    gap: 28px;
+  }
+  .nav__link {
+    font-size: 14px;
+  }
 }
 </style>
