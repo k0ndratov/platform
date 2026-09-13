@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { start } from '../test-utils/harness.js'
+import { MESSAGES } from '../../shared/rules.js'
 
 let h
 before(async () => (h = await start()))
@@ -66,14 +67,14 @@ test('GET /api/startups/:slug returns the full shape', async () => {
 test('GET /api/startups/:slug -> 404 for unknown slug', async () => {
   const r = await h.request('GET', '/api/startups/nope')
   assert.equal(r.status, 404)
-  assert.equal(r.json.error, 'Startup not found')
+  assert.equal(r.json.error, MESSAGES.startupNotFound)
 })
 
 // ---- validation ----
 test('POST /api/startups with an empty body lists the validation errors', async () => {
   const r = await h.request('POST', '/api/startups', { body: {} })
   assert.equal(r.status, 400)
-  assert.equal(r.json.error, ['Name must have at least 2 letters', 'Pitch must have at least 10 letters', 'Unknown stage'].join('. '))
+  assert.equal(r.json.error, [MESSAGES.startupName, MESSAGES.startupPitch, MESSAGES.startupStage].join('. '))
 })
 
 test('POST /api/startups rejects a role without a name', async () => {
@@ -81,7 +82,7 @@ test('POST /api/startups rejects a role without a name', async () => {
     body: { name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea', roles: [{ role: '  ' }] },
   })
   assert.equal(r.status, 400)
-  assert.equal(r.json.error, 'Every role needs a name')
+  assert.equal(r.json.error, MESSAGES.roleName)
 })
 
 // ---- mutations ----
@@ -122,7 +123,7 @@ test('a second startup with the same name gets a -2 slug and keeps a valid color
 test('apply: unknown role -> 400, success, duplicate -> 409, message without role -> 201', async () => {
   const bad = await h.request('POST', '/api/startups/reviewmate/apply', { body: { roleId: 9999 } })
   assert.equal(bad.status, 400)
-  assert.equal(bad.json.error, 'Unknown role')
+  assert.equal(bad.json.error, MESSAGES.unknownRole)
 
   const full = await h.request('GET', '/api/startups/reviewmate')
   const roleId = full.json.lookingFor[0].id
@@ -132,7 +133,7 @@ test('apply: unknown role -> 400, success, duplicate -> 409, message without rol
 
   const dup = await h.request('POST', '/api/startups/reviewmate/apply', { body: { roleId } })
   assert.equal(dup.status, 409)
-  assert.equal(dup.json.error, 'You already applied for this role')
+  assert.equal(dup.json.error, MESSAGES.alreadyApplied)
 
   const msg = await h.request('POST', '/api/startups/reviewmate/apply', { body: { message: 'Just a question' } })
   assert.equal(msg.status, 201)
@@ -145,11 +146,11 @@ test('apply: unknown role -> 400, success, duplicate -> 409, message without rol
 test('posts: non-member -> 403, short title -> 400, member -> 201 and newest first', async () => {
   const forbidden = await h.request('POST', '/api/startups/reviewmate/posts', { body: { title: 'Hello', text: 'Some longer text' }, userId: 4 })
   assert.equal(forbidden.status, 403)
-  assert.equal(forbidden.json.error, 'Only team members can write in the blog')
+  assert.equal(forbidden.json.error, MESSAGES.membersOnly)
 
   const short = await h.request('POST', '/api/startups/peerdesk/posts', { body: { title: 'Hi', text: 'Some longer text' } })
   assert.equal(short.status, 400)
-  assert.equal(short.json.error, 'Title (3+) and text (10+) are required')
+  assert.equal(short.json.error, MESSAGES.postInvalid)
 
   const ok = await h.request('POST', '/api/startups/peerdesk/posts', { body: { title: 'Hello', text: 'Some longer text' } })
   assert.equal(ok.status, 201)
@@ -169,7 +170,7 @@ test('like toggles and counts', async () => {
   assert.deepEqual(off.json, { postId: post.id, liked: false, likes: 0 })
   const missing = await h.request('POST', '/api/startups/peerdesk/posts/9999/like')
   assert.equal(missing.status, 404)
-  assert.equal(missing.json.error, 'Post not found')
+  assert.equal(missing.json.error, MESSAGES.postNotFound)
 })
 
 test('recommended is empty for a user whose skills match nothing', async () => {

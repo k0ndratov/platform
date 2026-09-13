@@ -1,5 +1,8 @@
 // Turn database rows into the JSON shape the frontend expects.
 import { db, parseJson } from './db.js'
+import { matchSkills } from '../../shared/rules.js'
+
+export { matchSkills }
 
 export function userToJson(row) {
   if (!row) return null
@@ -67,14 +70,6 @@ const postsOf = db.prepare(
 const roadmapOf = db.prepare('SELECT * FROM startup_roadmap WHERE startup_id = ? ORDER BY position, id')
 const updatesOf = db.prepare('SELECT id, date, text FROM startup_updates WHERE startup_id = ? ORDER BY id DESC')
 const appliedTo = db.prepare('SELECT role_id FROM startup_applications WHERE startup_id = ? AND user_id = ?')
-
-/** Compares user skills with the skills the startup needs. Score is 0..1. */
-export function matchSkills(roles, userSkills) {
-  const needed = [...new Set(roles.flatMap((r) => r.skills))]
-  const lower = new Set(userSkills.map((x) => x.toLowerCase()))
-  const matched = needed.filter((x) => lower.has(x.toLowerCase()))
-  return { needed, matched, score: needed.length ? matched.length / needed.length : 0 }
-}
 
 function fmtDate(iso) {
   return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })

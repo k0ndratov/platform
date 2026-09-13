@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { localApi } from './api.local.js'
+import { MESSAGES } from '../../shared/rules.js'
 
 const KEY = 's21-demo-db-v1'
 const minutes = (n) => new Date(Date.now() + n * 60_000).toISOString()
@@ -7,6 +8,14 @@ const minutes = (n) => new Date(Date.now() + n * 60_000).toISOString()
 beforeEach(() => {
   localApi.reset()
   localStorage.clear()
+})
+
+describe('test mode', () => {
+  it('skips the artificial delay under Vitest', async () => {
+    const t0 = performance.now()
+    await localApi.me()
+    expect(performance.now() - t0).toBeLessThan(50)
+  })
 })
 
 describe('seed and persistence', () => {
@@ -53,16 +62,16 @@ describe('meetups', () => {
   it('validates input with the same messages as the server', async () => {
     await expect(localApi.createMeetup({})).rejects.toThrow(
       [
-        'Title must have at least 3 letters',
-        'Unknown topic',
-        'Place is required',
-        'Duration must be 5..240 minutes',
-        'Capacity must be 2..100',
+        MESSAGES.meetupTitle,
+        MESSAGES.meetupTopic,
+        MESSAGES.meetupPlace,
+        MESSAGES.meetupDuration,
+        MESSAGES.meetupCapacity,
       ].join('. '),
     )
     await expect(
       localApi.createMeetup({ title: 'Valid', topic: 'Chill', place: 'Lounge', duration: 30, capacity: 4, startsAt: 'not-a-date' }),
-    ).rejects.toThrow('startsAt is not a valid date')
+    ).rejects.toThrow(MESSAGES.meetupStartsAt)
   })
 
   it('creates a live meetup with the host as member, or an upcoming one with a future start', async () => {
@@ -96,7 +105,7 @@ describe('meetups', () => {
     json.meetups.find((m) => m.id === tiny.id).memberIds = [2, 3]
     localApi.reset()
     localStorage.setItem(KEY, JSON.stringify(json))
-    await expect(localApi.joinMeetup(tiny.id)).rejects.toThrow('This meetup is full')
+    await expect(localApi.joinMeetup(tiny.id)).rejects.toThrow(MESSAGES.meetupFull)
 
     const ended = await localApi.createMeetup({ title: 'Old', topic: 'Chill', place: 'Lounge', duration: 30, capacity: 5, startsAt: minutes(-120) })
     expect(ended.status).toBe('ended')
@@ -104,14 +113,14 @@ describe('meetups', () => {
     json2.meetups.find((m) => m.id === ended.id).memberIds = [2]
     localApi.reset()
     localStorage.setItem(KEY, JSON.stringify(json2))
-    await expect(localApi.joinMeetup(ended.id)).rejects.toThrow('This meetup has already ended')
+    await expect(localApi.joinMeetup(ended.id)).rejects.toThrow(MESSAGES.meetupEnded)
 
-    await expect(localApi.joinMeetup(9999)).rejects.toThrow('Meetup not found')
+    await expect(localApi.joinMeetup(9999)).rejects.toThrow(MESSAGES.meetupNotFound)
   })
 
   it('leave: host cannot leave, a member can', async () => {
     const mine = await localApi.createMeetup({ title: 'Mine', topic: 'Chill', place: 'Lounge', duration: 30, capacity: 5 })
-    await expect(localApi.leaveMeetup(mine.id)).rejects.toThrow('The host cannot leave their own meetup')
+    await expect(localApi.leaveMeetup(mine.id)).rejects.toThrow(MESSAGES.hostCannotLeave)
     const all = await localApi.meetups()
     const rust = all.live.find((m) => m.title.startsWith('Rust'))
     await localApi.joinMeetup(rust.id)
@@ -123,7 +132,7 @@ describe('meetups', () => {
 
 describe('skills and recommendations', () => {
   it('updateSkills trims, dedupes, caps at 30 and rejects non-arrays', async () => {
-    await expect(localApi.updateSkills('Vue')).rejects.toThrow('skills must be an array')
+    await expect(localApi.updateSkills('Vue')).rejects.toThrow(MESSAGES.skillsArray)
     const many = Array.from({ length: 40 }, (_, i) => `S${i}`)
     const me = await localApi.updateSkills([' Vue ', 'Vue', '', ...many])
     expect(me.skills[0]).toBe('Vue')
@@ -153,10 +162,10 @@ describe('skills and recommendations', () => {
 describe('startups', () => {
   it('validates input with the same messages as the server', async () => {
     await expect(localApi.createStartup({})).rejects.toThrow(
-      ['Name must have at least 2 letters', 'Pitch must have at least 10 letters', 'Unknown stage'].join('. '),
+      [MESSAGES.startupName, MESSAGES.startupPitch, MESSAGES.startupStage].join('. '),
     )
     await expect(localApi.createStartup({ name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea', roles: [{ role: '  ' }] })).rejects.toThrow(
-      'Every role needs a name',
+      MESSAGES.roleName,
     )
   })
 
@@ -182,23 +191,23 @@ describe('startups', () => {
     expect(s2.slug).toBe('desk-radar-2')
     expect(s2.color).toBe('#25C1CB')
     expect((await localApi.startup('desk-radar')).name).toBe('Desk Radar')
-    await expect(localApi.startup('nope')).rejects.toThrow('Startup not found')
+    await expect(localApi.startup('nope')).rejects.toThrow(MESSAGES.startupNotFound)
   })
 
   it('apply: unknown role, success, duplicate, message without role', async () => {
-    await expect(localApi.applyToStartup('reviewmate', { roleId: 9999 })).rejects.toThrow('Unknown role')
+    await expect(localApi.applyToStartup('reviewmate', { roleId: 9999 })).rejects.toThrow(MESSAGES.unknownRole)
     const full = await localApi.startup('reviewmate')
     const roleId = full.lookingFor[0].id
     const ok = await localApi.applyToStartup('reviewmate', { roleId, message: 'Hi' })
     expect(ok.appliedRoleIds).toEqual([roleId])
-    await expect(localApi.applyToStartup('reviewmate', { roleId })).rejects.toThrow('You already applied for this role')
+    await expect(localApi.applyToStartup('reviewmate', { roleId })).rejects.toThrow(MESSAGES.alreadyApplied)
     const msg = await localApi.applyToStartup('reviewmate', { message: 'Question' })
     expect(msg.appliedRoleIds).toContain(roleId) // a message without a role is stored with roleId null
   })
 
   it('posts: forbidden for non-members, validated, newest first; likes toggle', async () => {
-    await expect(localApi.createPost('reviewmate', { title: 'Hello', text: 'Some longer text' })).rejects.toThrow('Only team members can write in the blog')
-    await expect(localApi.createPost('peerdesk', { title: 'Hi', text: 'Some longer text' })).rejects.toThrow('Title (3+) and text (10+) are required')
+    await expect(localApi.createPost('reviewmate', { title: 'Hello', text: 'Some longer text' })).rejects.toThrow(MESSAGES.membersOnly)
+    await expect(localApi.createPost('peerdesk', { title: 'Hi', text: 'Some longer text' })).rejects.toThrow(MESSAGES.postInvalid)
     const s = await localApi.createPost('peerdesk', { title: 'Hello', text: 'Some longer text' })
     expect(s.blog).toHaveLength(4)
     expect(s.blog[0].title).toBe('Hello')
@@ -208,13 +217,14 @@ describe('startups', () => {
     expect(on).toEqual({ postId: s.blog[0].id, liked: true, likes: 1 })
     const off = await localApi.likePost('peerdesk', s.blog[0].id)
     expect(off).toEqual({ postId: s.blog[0].id, liked: false, likes: 0 })
-    await expect(localApi.likePost('peerdesk', 9999)).rejects.toThrow('Post not found')
+    await expect(localApi.likePost('peerdesk', 9999)).rejects.toThrow(MESSAGES.postNotFound)
   })
 
   it('full startup shape: blog newest first, roadmap ordered, links and updates present', async () => {
     const s = await localApi.startup('peerdesk')
     expect(s.blog[0].title).toBe('Why we killed the "reserve a desk" feature')
     expect(s.roadmap.map((r) => r.status)).toEqual(['done', 'done', 'in-progress', 'planned', 'planned', 'planned'])
+    expect(s.roadmap.every((r) => !('position' in r))).toBe(true) // same shape as the server
     expect(s.links).toHaveLength(2)
     expect(s.updates).toHaveLength(3)
     expect(s.appliedRoleIds).toEqual([])

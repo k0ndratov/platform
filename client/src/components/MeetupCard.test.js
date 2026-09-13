@@ -101,14 +101,14 @@ describe('MeetupCard', () => {
   })
 
   it('shows an error toast and does not emit update when joinMeetup rejects', async () => {
-    api.joinMeetup.mockRejectedValue(new Error('This meetup is full'))
+    api.joinMeetup.mockRejectedValue(new Error('Network down'))
     const meetup = makeMeetup()
     const wrapper = mount(MeetupCard, { props: { meetup } })
     const btn = wrapper.findAll('button').find((b) => b.text().includes('Join'))
     await btn.trigger('click')
     await flushPromises()
 
-    expect(toast.error).toHaveBeenCalledWith('This meetup is full')
+    expect(toast.error).toHaveBeenCalledWith('Network down')
     expect(wrapper.emitted('update')).toBeFalsy()
   })
 

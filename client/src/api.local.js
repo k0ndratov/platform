@@ -1,12 +1,13 @@
 // Browser-only "backend". Same methods as api.js, but the data lives in localStorage.
 // Used for static demo deployments (Vercel). Mirrors the rules of the Express routes.
 import { demoUsers, demoMeetups, demoStartups } from '../../shared/demo-data.js'
+import { MESSAGES, STAGES, cleanList, matchSkills, validateMeetupInput, validateStartupInput } from '../../shared/rules.js'
 
 const KEY = 's21-demo-db-v1'
 const CURRENT_USER_ID = 1
-const TOPICS = ['Ideas', 'Tech talk', 'Chill', 'Study group']
-const STAGES = ['Idea', 'MVP', 'Growth']
-const delay = (ms = 120) => new Promise((r) => setTimeout(r, ms))
+// Small pause so the UI feels like a network call. Skipped under Vitest.
+const IN_TEST = Boolean(import.meta.env?.VITEST) || import.meta.env?.MODE === 'test'
+const delay = (ms = 120) => (IN_TEST ? Promise.resolve() : new Promise((r) => setTimeout(r, ms)))
 
 // ---------- storage ----------
 let db = null
@@ -127,13 +128,6 @@ function meetupToJson(m) {
   }
 }
 
-function matchSkills(roles, userSkills) {
-  const needed = [...new Set(roles.flatMap((r) => r.skills))]
-  const lower = new Set(userSkills.map((x) => x.toLowerCase()))
-  const matched = needed.filter((x) => lower.has(x.toLowerCase()))
-  return { needed, matched, score: needed.length ? matched.length / needed.length : 0 }
-}
-
 function startupSummary(s) {
   const me = currentUser()
   const members = [...s.members].sort((a, b) => Number(b.isFounder) - Number(a.isFounder))
@@ -166,16 +160,14 @@ function startupFull(s) {
           likes: p.likedBy.length, liked: p.likedBy.includes(CURRENT_USER_ID), comments: p.comments,
         }
       }),
-    roadmap: [...s.roadmap].sort((a, b) => a.position - b.position).map((r) => ({ ...r })),
+    roadmap: [...s.roadmap].sort((a, b) => a.position - b.position).map(({ position, ...r }) => r), // same shape as the server (no position)
     updates: [...s.updates].reverse(),
     appliedRoleIds: db.applications.filter((a) => a.startupId === s.id && a.userId === CURRENT_USER_ID).map((a) => a.roleId),
   }
 }
 
-const findStartup = (slug) => db.startups.find((s) => s.slug === slug) || fail('Startup not found', 404)
-const findMeetup = (id) => db.meetups.find((m) => m.id === Number(id)) || fail('Meetup not found', 404)
-const cleanList = (arr, max = 20) =>
-  Array.isArray(arr) ? [...new Set(arr.map((s) => String(s).trim()).filter(Boolean))].slice(0, max) : []
+const findStartup = (slug) => db.startups.find((s) => s.slug === slug) || fail(MESSAGES.startupNotFound, 404)
+const findMeetup = (id) => db.meetups.find((m) => m.id === Number(id)) || fail(MESSAGES.meetupNotFound, 404)
 
 function slugify(name) {
   const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'startup'
@@ -196,7 +188,7 @@ export const localApi = {
   async updateSkills(skills) {
     load()
     await delay()
-    if (!Array.isArray(skills)) fail('skills must be an array')
+    if (!Array.isArray(skills)) fail(MESSAGES.skillsArray)
     currentUser().skills = cleanList(skills, 30)
     save()
     return userToJson(currentUser())
@@ -222,25 +214,11 @@ export const localApi = {
   async createMeetup(b) {
     load()
     await delay()
-    const errors = []
-    const title = String(b.title || '').trim()
-    if (title.length < 3) errors.push('Title must have at least 3 letters')
-    if (!TOPICS.includes(b.topic)) errors.push('Unknown topic')
-    const place = String(b.place || '').trim()
-    if (!place) errors.push('Place is required')
-    const duration = Number(b.duration)
-    if (!Number.isInteger(duration) || duration < 5 || duration > 240) errors.push('Duration must be 5..240 minutes')
-    const capacity = Number(b.capacity)
-    if (!Number.isInteger(capacity) || capacity < 2 || capacity > 100) errors.push('Capacity must be 2..100')
-    let startsAt = new Date()
-    if (b.startsAt) {
-      startsAt = new Date(b.startsAt)
-      if (Number.isNaN(startsAt.getTime())) errors.push('startsAt is not a valid date')
-    }
+    const { errors, value: v } = validateMeetupInput(b)
     if (errors.length) fail(errors.join('. '))
     const m = {
-      id: nextId(), title, topic: b.topic, description: String(b.description || '').trim(), place,
-      startsAt: startsAt.toISOString(), duration, capacity, hostId: CURRENT_USER_ID, memberIds: [CURRENT_USER_ID],
+      id: nextId(), title: v.title, topic: v.topic, description: v.description, place: v.place,
+      startsAt: v.startsAt.toISOString(), duration: v.duration, capacity: v.capacity, hostId: CURRENT_USER_ID, memberIds: [CURRENT_USER_ID],
       createdAt: new Date().toISOString(),
     }
     db.meetups.push(m)
@@ -253,9 +231,9 @@ export const localApi = {
     await delay()
     const m = findMeetup(id)
     const json = meetupToJson(m)
-    if (json.status === 'ended') fail('This meetup has already ended', 409)
+    if (json.status === 'ended') fail(MESSAGES.meetupEnded, 409)
     if (json.joined) return json
-    if (m.memberIds.length >= m.capacity) fail('This meetup is full', 409)
+    if (m.memberIds.length >= m.capacity) fail(MESSAGES.meetupFull, 409)
     m.memberIds.push(CURRENT_USER_ID)
     save()
     return meetupToJson(m)
@@ -265,7 +243,7 @@ export const localApi = {
     load()
     await delay()
     const m = findMeetup(id)
-    if (m.hostId === CURRENT_USER_ID) fail('The host cannot leave their own meetup', 409)
+    if (m.hostId === CURRENT_USER_ID) fail(MESSAGES.hostCannotLeave, 409)
     m.memberIds = m.memberIds.filter((u) => u !== CURRENT_USER_ID)
     save()
     return meetupToJson(m)
@@ -304,26 +282,17 @@ export const localApi = {
   async createStartup(b) {
     load()
     await delay()
-    const errors = []
-    const name = String(b.name || '').trim()
-    if (name.length < 2) errors.push('Name must have at least 2 letters')
-    const pitch = String(b.pitch || '').trim()
-    if (pitch.length < 10) errors.push('Pitch must have at least 10 letters')
-    if (!STAGES.includes(b.stage)) errors.push('Unknown stage')
-    const roles = Array.isArray(b.roles) ? b.roles : []
-    if (roles.some((r) => !String(r?.role || '').trim())) errors.push('Every role needs a name')
+    const { errors, value: v } = validateStartupInput(b)
     if (errors.length) fail(errors.join('. '))
-    const links = Array.isArray(b.links) ? b.links.filter((l) => String(l?.label || '').trim() && String(l?.url || '').trim()) : []
     const s = {
-      id: nextId(), slug: slugify(name), name, pitch,
-      description: String(b.description || '').trim(), problem: String(b.problem || '').trim(), solution: String(b.solution || '').trim(),
-      stage: b.stage, started: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
-      stack: cleanList(b.stack), color: /^#[0-9a-f]{6}$/i.test(b.color || '') ? b.color : '#25c1cb',
-      logo: name.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join(''),
+      id: nextId(), slug: slugify(v.name), name: v.name, pitch: v.pitch,
+      description: v.description, problem: v.problem, solution: v.solution,
+      stage: v.stage, started: new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }),
+      stack: v.stack, color: v.color, logo: v.logo,
       createdBy: CURRENT_USER_ID, createdAt: new Date().toISOString(),
       members: [{ userId: CURRENT_USER_ID, role: 'Founder', isFounder: true }],
-      roles: roles.map((r) => ({ id: nextId(), role: String(r.role).trim(), text: String(r.text || '').trim(), skills: cleanList(r.skills) })),
-      links: links.map((l) => ({ id: nextId(), label: String(l.label).trim(), url: String(l.url).trim() })),
+      roles: v.roles.map((r) => ({ id: nextId(), ...r })),
+      links: v.links.map((l) => ({ id: nextId(), ...l })),
       posts: [], roadmap: [], updates: [],
     }
     db.startups.push(s)
@@ -337,8 +306,8 @@ export const localApi = {
     const s = findStartup(slug)
     const rid = roleId ? Number(roleId) : null
     if (rid) {
-      if (!s.roles.some((r) => r.id === rid)) fail('Unknown role')
-      if (db.applications.some((a) => a.startupId === s.id && a.roleId === rid && a.userId === CURRENT_USER_ID)) fail('You already applied for this role', 409)
+      if (!s.roles.some((r) => r.id === rid)) fail(MESSAGES.unknownRole)
+      if (db.applications.some((a) => a.startupId === s.id && a.roleId === rid && a.userId === CURRENT_USER_ID)) fail(MESSAGES.alreadyApplied, 409)
     }
     db.applications.push({ id: nextId(), startupId: s.id, roleId: rid, userId: CURRENT_USER_ID, message: String(message || '').trim().slice(0, 1000), createdAt: new Date().toISOString() })
     save()
@@ -349,10 +318,10 @@ export const localApi = {
     load()
     await delay()
     const s = findStartup(slug)
-    if (!s.members.some((m) => m.userId === CURRENT_USER_ID)) fail('Only team members can write in the blog', 403)
+    if (!s.members.some((m) => m.userId === CURRENT_USER_ID)) fail(MESSAGES.membersOnly, 403)
     const t = String(title || '').trim()
     const body = String(text || '').trim()
-    if (t.length < 3 || body.length < 10) fail('Title (3+) and text (10+) are required')
+    if (t.length < 3 || body.length < 10) fail(MESSAGES.postInvalid)
     s.posts.push({ id: nextId(), authorId: CURRENT_USER_ID, title: t, text: body, comments: 0, likedBy: [], createdAt: new Date().toISOString() })
     save()
     return startupFull(s)
@@ -362,7 +331,7 @@ export const localApi = {
     load()
     await delay()
     const s = findStartup(slug)
-    const p = s.posts.find((x) => x.id === Number(postId)) || fail('Post not found', 404)
+    const p = s.posts.find((x) => x.id === Number(postId)) || fail(MESSAGES.postNotFound, 404)
     const liked = p.likedBy.includes(CURRENT_USER_ID)
     p.likedBy = liked ? p.likedBy.filter((u) => u !== CURRENT_USER_ID) : [...p.likedBy, CURRENT_USER_ID]
     save()

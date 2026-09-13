@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { start } from '../test-utils/harness.js'
+import { MESSAGES } from '../../shared/rules.js'
 
 let h
 before(async () => (h = await start()))
@@ -43,7 +44,7 @@ test('unknown API route -> 404 JSON', async () => {
 test('PUT /api/me/skills rejects a non-array', async () => {
   const r = await h.request('PUT', '/api/me/skills', { body: { skills: 'Vue' } })
   assert.equal(r.status, 400)
-  assert.equal(r.json.error, 'skills must be an array')
+  assert.equal(r.json.error, MESSAGES.skillsArray)
 })
 
 test('PUT /api/me/skills trims, dedupes and caps at 30', async () => {

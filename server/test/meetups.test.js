@@ -1,6 +1,7 @@
 import { test, before, after } from 'node:test'
 import assert from 'node:assert/strict'
 import { start } from '../test-utils/harness.js'
+import { MESSAGES } from '../../shared/rules.js'
 
 let h
 before(async () => (h = await start()))
@@ -27,7 +28,7 @@ test('GET /api/meetups splits the seed into 3 live and 3 upcoming', async () => 
 test('GET /api/meetups/:id -> 404 for unknown id', async () => {
   const r = await h.request('GET', '/api/meetups/9999')
   assert.equal(r.status, 404)
-  assert.equal(r.json.error, 'Meetup not found')
+  assert.equal(r.json.error, MESSAGES.meetupNotFound)
 })
 
 // ---- validation ----
@@ -37,11 +38,11 @@ test('POST /api/meetups with an empty body lists every validation error', async 
   assert.equal(
     r.json.error,
     [
-      'Title must have at least 3 letters',
-      'Unknown topic',
-      'Place is required',
-      'Duration must be 5..240 minutes',
-      'Capacity must be 2..100',
+      MESSAGES.meetupTitle,
+      MESSAGES.meetupTopic,
+      MESSAGES.meetupPlace,
+      MESSAGES.meetupDuration,
+      MESSAGES.meetupCapacity,
     ].join('. '),
   )
 })
@@ -51,7 +52,7 @@ test('POST /api/meetups with an unparseable startsAt -> 400', async () => {
     body: { title: 'Valid', topic: 'Chill', place: 'Lounge', duration: 30, capacity: 4, startsAt: 'not-a-date' },
   })
   assert.equal(r.status, 400)
-  assert.equal(r.json.error, 'startsAt is not a valid date')
+  assert.equal(r.json.error, MESSAGES.meetupStartsAt)
 })
 
 // ---- mutations ----
@@ -89,7 +90,7 @@ test('user 4 joins the created meetup; a second join is idempotent', async () =>
 test('joining a full meetup -> 409', async () => {
   const r = await h.request('POST', `/api/meetups/${createdId}/join`, { userId: 5 })
   assert.equal(r.status, 409)
-  assert.equal(r.json.error, 'This meetup is full')
+  assert.equal(r.json.error, MESSAGES.meetupFull)
 })
 
 test('joining an ended meetup -> 409', async () => {
@@ -99,13 +100,13 @@ test('joining an ended meetup -> 409', async () => {
   assert.equal(created.json.status, 'ended')
   const r = await h.request('POST', `/api/meetups/${created.json.id}/join`, { userId: 4 })
   assert.equal(r.status, 409)
-  assert.equal(r.json.error, 'This meetup has already ended')
+  assert.equal(r.json.error, MESSAGES.meetupEnded)
 })
 
 test('the host cannot leave their own meetup', async () => {
   const r = await h.request('DELETE', `/api/meetups/${createdId}/join`)
   assert.equal(r.status, 409)
-  assert.equal(r.json.error, 'The host cannot leave their own meetup')
+  assert.equal(r.json.error, MESSAGES.hostCannotLeave)
 })
 
 test('a member can leave', async () => {

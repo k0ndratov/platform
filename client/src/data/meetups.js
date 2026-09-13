@@ -1,4 +1,6 @@
-export const topics = ['Ideas', 'Tech talk', 'Chill', 'Study group']
+import { TOPICS } from '../../../shared/rules.js'
+
+export const topics = TOPICS
 
 export const places = [
   'Kitchen, 2nd floor',
