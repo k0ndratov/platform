@@ -2,6 +2,9 @@
 
 Vue 3 (Vite) frontend + Express backend + SQLite (Node's built-in `node:sqlite`).
 
+**Live demo:** https://platform-nine-roan-19.vercel.app
+(static build, data is stored in your browser and is not shared between visitors)
+
 ## Run in development
 
 ```bash
