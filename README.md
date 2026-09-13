@@ -27,6 +27,22 @@ docker compose up --build
 Open http://localhost:3000. The Express server serves the built frontend and the API from one port.
 The database is kept in the `db-data` volume.
 
+## Tests
+
+```bash
+npm test                # server + client
+npm test -w server      # node:test, in-memory SQLite (DB_PATH=:memory:)
+npm test -w client      # Vitest + jsdom + @vue/test-utils
+```
+
+- `server/test/` – HTTP tests through the real Express app on a random port, one process per file with a fresh
+  in-memory database. `server/test-utils/harness.js` starts the app and checks that `server/data/school21.db`
+  is never touched.
+- `client/src/**/*.test.js` – the browser adapter (`api.local.js`), the API mode switch, and the components.
+- `shared/rules.js` – validation messages and rules used by both the server and the browser adapter, so tests
+  import the messages instead of retyping them.
+- CI: `.github/workflows/test.yml` runs `npm ci`, `npm test`, and `npm run build` on every push.
+
 ## Structure
 
 - `client/` – Vue app
