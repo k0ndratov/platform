@@ -105,7 +105,7 @@ export function validateStartupInput(body) {
       color,
       logo,
       stack: cleanList(b.stack),
-      roles: roles.map((r) => ({ role: String(r.role).trim(), text: String(r.text || '').trim(), skills: cleanList(r.skills) })),
+      roles: roles.map((r) => ({ role: String(r?.role || '').trim(), text: String(r?.text || '').trim(), skills: cleanList(r?.skills) })),
       links: links.map((l) => ({ label: String(l.label).trim(), url: String(l.url).trim() })),
     },
   }

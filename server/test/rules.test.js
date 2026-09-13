@@ -14,6 +14,33 @@ describe('constants', () => {
     assert.ok(values.every((v) => typeof v === 'string' && v.length > 0))
     assert.equal(new Set(values).size, values.length)
   })
+  // The one place where the user-facing text is pinned. Every other test imports MESSAGES.
+  // (This file is exempt from the "no message literals in tests" sweep for that reason.)
+  test('MESSAGES text is exactly what users see', () => {
+    assert.deepEqual(MESSAGES, {
+      meetupTitle: 'Title must have at least 3 letters',
+      meetupTopic: 'Unknown topic',
+      meetupPlace: 'Place is required',
+      meetupDuration: 'Duration must be 5..240 minutes',
+      meetupCapacity: 'Capacity must be 2..100',
+      meetupStartsAt: 'startsAt is not a valid date',
+      meetupEnded: 'This meetup has already ended',
+      meetupFull: 'This meetup is full',
+      hostCannotLeave: 'The host cannot leave their own meetup',
+      meetupNotFound: 'Meetup not found',
+      startupName: 'Name must have at least 2 letters',
+      startupPitch: 'Pitch must have at least 10 letters',
+      startupStage: 'Unknown stage',
+      roleName: 'Every role needs a name',
+      unknownRole: 'Unknown role',
+      alreadyApplied: 'You already applied for this role',
+      membersOnly: 'Only team members can write in the blog',
+      postInvalid: 'Title (3+) and text (10+) are required',
+      startupNotFound: 'Startup not found',
+      postNotFound: 'Post not found',
+      skillsArray: 'skills must be an array',
+    })
+  })
 })
 
 describe('cleanList', () => {
@@ -76,9 +103,12 @@ describe('validateStartupInput', () => {
     assert.deepEqual(validateStartupInput({}).errors, [MESSAGES.startupName, MESSAGES.startupPitch, MESSAGES.startupStage])
     assert.equal(validateStartupInput({}).value.logo, '') // must not throw on an empty name
   })
-  test('role without a name', () => {
-    const { errors } = validateStartupInput({ name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea', roles: [{ role: '  ' }] })
-    assert.deepEqual(errors, [MESSAGES.roleName])
+  test('role without a name, including a null element', () => {
+    const base = { name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea' }
+    assert.deepEqual(validateStartupInput({ ...base, roles: [{ role: '  ' }] }).errors, [MESSAGES.roleName])
+    const nul = validateStartupInput({ ...base, roles: [null] })
+    assert.deepEqual(nul.errors, [MESSAGES.roleName])
+    assert.deepEqual(nul.value.roles, [{ role: '', text: '', skills: [] }]) // normalization must not throw
   })
   test('normalizes value: color kept when valid, fallback otherwise; logo; lists', () => {
     const base = { name: ' Desk Radar ', pitch: 'See which desks are free.', stage: 'MVP' }

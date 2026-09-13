@@ -77,6 +77,7 @@ test('POST /api/meetups with a future startsAt is upcoming', async () => {
   assert.equal(r.json.status, 'upcoming')
 })
 
+// The next five tests reuse `createdId` from the test above and build on each other in order.
 test('user 4 joins the created meetup; a second join is idempotent', async () => {
   const r1 = await h.request('POST', `/api/meetups/${createdId}/join`, { userId: 4 })
   assert.equal(r1.status, 200)

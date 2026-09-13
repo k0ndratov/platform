@@ -40,7 +40,7 @@ npm test -w client      # Vitest + jsdom + @vue/test-utils
   is never touched.
 - `client/src/**/*.test.js` – the browser adapter (`api.local.js`), the API mode switch, and the components.
 - `shared/rules.js` – validation messages and rules used by both the server and the browser adapter, so tests
-  import the messages instead of retyping them.
+  import the messages instead of retyping them. The only place the text itself is pinned is `server/test/rules.test.js`.
 - CI: `.github/workflows/test.yml` runs `npm ci`, `npm test`, and `npm run build` on every push.
 - Lockfiles: the root `package-lock.json` is the one npm uses inside the workspace. Docker builds the client
   with its own `client/package-lock.json`, and npm does not update that file from inside the workspace.

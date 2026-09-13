@@ -167,6 +167,7 @@ describe('startups', () => {
     await expect(localApi.createStartup({ name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea', roles: [{ role: '  ' }] })).rejects.toThrow(
       MESSAGES.roleName,
     )
+    await expect(localApi.createStartup({ name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea', roles: [null] })).rejects.toThrow(MESSAGES.roleName)
   })
 
   it('creates a startup with slug, -2 suffix, founder member and color fallback', async () => {
@@ -202,7 +203,7 @@ describe('startups', () => {
     expect(ok.appliedRoleIds).toEqual([roleId])
     await expect(localApi.applyToStartup('reviewmate', { roleId })).rejects.toThrow(MESSAGES.alreadyApplied)
     const msg = await localApi.applyToStartup('reviewmate', { message: 'Question' })
-    expect(msg.appliedRoleIds).toContain(roleId) // a message without a role is stored with roleId null
+    expect(msg.appliedRoleIds).toEqual([roleId, null]) // a message without a role is stored with roleId null
   })
 
   it('posts: forbidden for non-members, validated, newest first; likes toggle', async () => {

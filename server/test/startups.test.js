@@ -83,6 +83,11 @@ test('POST /api/startups rejects a role without a name', async () => {
   })
   assert.equal(r.status, 400)
   assert.equal(r.json.error, MESSAGES.roleName)
+  const nul = await h.request('POST', '/api/startups', {
+    body: { name: 'Ok', pitch: 'Long enough pitch', stage: 'Idea', roles: [null] },
+  })
+  assert.equal(nul.status, 400)
+  assert.equal(nul.json.error, MESSAGES.roleName)
 })
 
 // ---- mutations ----

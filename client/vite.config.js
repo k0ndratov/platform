@@ -9,6 +9,7 @@ export default defineConfig({
     include: ['src/**/*.test.js'],
     restoreMocks: true,
     unstubEnvs: true,
+    unstubGlobals: true,
   },
   server: {
     port: 5173,
