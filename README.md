@@ -42,6 +42,10 @@ npm test -w client      # Vitest + jsdom + @vue/test-utils
 - `shared/rules.js` – validation messages and rules used by both the server and the browser adapter, so tests
   import the messages instead of retyping them.
 - CI: `.github/workflows/test.yml` runs `npm ci`, `npm test`, and `npm run build` on every push.
+- Lockfiles: the root `package-lock.json` is the one npm uses inside the workspace. Docker builds the client
+  with its own `client/package-lock.json`, and npm does not update that file from inside the workspace.
+  After changing client dependencies, regenerate it standalone:
+  `cp client/package.json /tmp/x/ && (cd /tmp/x && npm install --package-lock-only) && cp /tmp/x/package-lock.json client/`.
 
 ## Structure
 
