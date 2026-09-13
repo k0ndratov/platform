@@ -1,0 +1,35 @@
+:root {
+  /* Colors sampled from the original platform */
+  --bg: #1d2633;
+  --surface: #263040;
+  --surface-2: #2c384a;
+  --surface-3: #3e4857;
+  --border: #323842;
+
+  --text: #ffffff;
+  --text-muted: #aebbca;
+  --text-dim: #8794a3;
+
+  --green: #44eb99;
+  --green-dark: #3dbc83;
+  --green-btn: #257e52;
+  --cyan: #25c1cb;
+  --blue: #3f95d2;
+  --sky: #36c5f0;
+  --link: #4db6f0;
+  --purple: #7c46d5;
+  --purple-deep: #851dcc;
+
+  --gradient-brand: linear-gradient(135deg, var(--cyan), var(--blue));
+  --gradient-progress: linear-gradient(90deg, #36c5f0, #67efac);
+  --gradient-login-card: linear-gradient(225deg, #5aa7b2 0%, #6b70c5 50%, #7f32dc 100%);
+
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 24px;
+
+  --font: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --header-height: 264px;
+  --container: 1220px;
+}
